@@ -4,9 +4,9 @@ import os
 import json
 import time
 
-# =============================
+# =========================
 # CONFIG
-# =============================
+# =========================
 
 TOKEN = "8033529702:AAENz15QMaIBja_soQa7yyHw02xaVw1RCW0"
 HF_TOKEN = "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"
@@ -14,11 +14,11 @@ REPLICATE_API = "r8_Lp5PPCCsYU7sxcFwqkYYZAjDWvMPE9I26vXVv"
 
 bot = telebot.TeleBot(TOKEN)
 
-DB="users.json"
+DB = "users.json"
 
-# =============================
+# =========================
 # DATABASE
-# =============================
+# =========================
 
 def load_users():
 
@@ -33,99 +33,108 @@ def save_users(data):
     json.dump(data,open(DB,"w"))
 
 
-users=load_users()
+users = load_users()
 
 
 def register(uid):
 
-    uid=str(uid)
+    uid = str(uid)
 
     if uid not in users:
 
-        users[uid]={
+        users[uid] = {
             "step":"product",
             "style":None
         }
 
         save_users(users)
 
-# =============================
+# =========================
 # START
-# =============================
+# =========================
 
 @bot.message_handler(commands=['start'])
 
 def start(m):
 
-    uid=str(m.from_user.id)
+    uid = str(m.from_user.id)
 
     register(uid)
 
-    users[uid]["step"]="product"
+    users[uid]["step"] = "product"
 
     save_users(users)
 
-    bot.send_message(m.chat.id,"STEP 1\nUpload foto PRODUK")
+    bot.send_message(
+        m.chat.id,
+        "STEP 1\nUpload foto PRODUK"
+    )
 
 
-# =============================
+# =========================
 # HANDLE PHOTO
-# =============================
+# =========================
 
 @bot.message_handler(content_types=['photo'])
 
 def photo(m):
 
-    uid=str(m.from_user.id)
+    uid = str(m.from_user.id)
 
-    step=users[uid]["step"]
+    step = users[uid]["step"]
 
-    file=bot.get_file(m.photo[-1].file_id)
+    file = bot.get_file(m.photo[-1].file_id)
 
-    img=bot.download_file(file.file_path)
+    img = bot.download_file(file.file_path)
 
-    if step=="product":
+    if step == "product":
 
         open("product.jpg","wb").write(img)
 
-        users[uid]["step"]="face"
+        users[uid]["step"] = "face"
 
         save_users(users)
 
-        bot.send_message(m.chat.id,"STEP 2\nUpload foto WAJAH")
+        bot.send_message(
+            m.chat.id,
+            "STEP 2\nUpload foto WAJAH"
+        )
 
         return
 
 
-    if step=="face":
+    if step == "face":
 
         open("face.jpg","wb").write(img)
 
-        users[uid]["step"]="style"
+        users[uid]["step"] = "style"
 
         save_users(users)
 
-        bot.send_message(m.chat.id,
-        """
+        bot.send_message(
+            m.chat.id,
+            """
 Pilih style
 
 1 OOTD
 2 UGC
 3 POV
 4 Dance
-""")
+"""
+        )
 
-# =============================
+
+# =========================
 # STYLE SELECT
-# =============================
+# =========================
 
 @bot.message_handler(func=lambda m: m.text in ["1","2","3","4"])
 
 def style(m):
 
-    uid=str(m.from_user.id)
+    uid = str(m.from_user.id)
 
-    users[uid]["style"]=m.text
+    users[uid]["style"] = m.text
 
     save_users(users)
 
@@ -134,46 +143,51 @@ def style(m):
     generate_model(m.chat.id,m.text)
 
 
-# =============================
+# =========================
 # GENERATE MODEL
-# =============================
+# =========================
 
 def generate_model(chat,style):
 
-    style_map={
+    style_map = {
 
-    "1":"fashion influencer ootd",
+        "1":"fashion influencer ootd",
 
-    "2":"ugc product review influencer",
+        "2":"ugc product review influencer",
 
-    "3":"pov product advertisement",
+        "3":"pov product advertisement",
 
-    "4":"tiktok dance influencer"
+        "4":"tiktok dance influencer"
 
     }
 
-    prompt=f"""
+    prompt = f"""
 photo of a female influencer
 
 style {style_map[style]}
 
 studio lighting
 social media advertisement
+high quality
 """
 
-    API_URL="https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+    API_URL = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
 
-    headers={
-        "Authorization":f"Bearer {HF_TOKEN}"
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}"
     }
 
-    payload={"inputs":prompt}
+    payload = {
+        "inputs": prompt
+    }
 
-    r=requests.post(API_URL,headers=headers,json=payload)
+    bot.send_message(chat,"AI membuat model influencer...")
 
-    if r.status_code!=200:
+    r = requests.post(API_URL,headers=headers,json=payload)
 
-        bot.send_message(chat,"AI model error")
+    if r.status_code != 200:
+
+        bot.send_message(chat,f"AI model error:\n{r.text}")
 
         return
 
@@ -182,22 +196,22 @@ social media advertisement
     face_swap(chat)
 
 
-# =============================
+# =========================
 # FACE SWAP
-# =============================
+# =========================
 
 def face_swap(chat):
 
     bot.send_message(chat,"AI face swap sedang diproses...")
 
-    url="https://api.replicate.com/v1/predictions"
+    url = "https://api.replicate.com/v1/predictions"
 
-    headers={
-        "Authorization":f"Token {REPLICATE_API}",
-        "Content-Type":"application/json"
+    headers = {
+        "Authorization": f"Token {REPLICATE_API}",
+        "Content-Type": "application/json"
     }
 
-    data={
+    data = {
         "version":"7de2ea26f2e6b5b2c48dfc1baf7a0b4f2d0e8d6d3a7b8b1b3a6d2a1f7a9d9f1",
         "input":{
             "source_image":"face.jpg",
@@ -205,25 +219,25 @@ def face_swap(chat):
         }
     }
 
-    r=requests.post(url,json=data,headers=headers)
+    r = requests.post(url,json=data,headers=headers)
 
-    prediction=r.json()
+    prediction = r.json()
 
-    get_url=prediction["urls"]["get"]
+    get_url = prediction["urls"]["get"]
 
     while True:
 
-        r=requests.get(get_url,headers=headers)
+        r = requests.get(get_url,headers=headers)
 
-        result=r.json()
+        result = r.json()
 
-        if result["status"]=="succeeded":
+        if result["status"] == "succeeded":
 
-            image_url=result["output"]
+            image_url = result["output"]
 
             break
 
-        if result["status"]=="failed":
+        if result["status"] == "failed":
 
             bot.send_message(chat,"Face swap gagal")
 
@@ -231,7 +245,7 @@ def face_swap(chat):
 
         time.sleep(2)
 
-    img=requests.get(image_url).content
+    img = requests.get(image_url).content
 
     open("result.png","wb").write(img)
 
@@ -240,9 +254,9 @@ def face_swap(chat):
     bot.send_message(chat,"Selesai.\nKetik /start untuk membuat lagi.")
 
 
-# =============================
-# RUN
-# =============================
+# =========================
+# RUN BOT
+# =========================
 
 print("BOT RUNNING")
 
