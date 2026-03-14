@@ -22,6 +22,7 @@ DB = "users.json"
 def load_users():
     if not os.path.exists(DB):
         return {}
+
     with open(DB, "r") as f:
         return json.load(f)
 
@@ -43,9 +44,7 @@ def register_user(uid):
         users[uid] = {
             "limit": 5,
             "plan": "free",
-            "step": "none",
-            "product": None,
-            "face": None,
+            "step": "product",
             "style": None
         }
 
@@ -60,10 +59,6 @@ def register_user(uid):
 def start(message):
 
     register_user(message.from_user.id)
-
-    users[str(message.from_user.id)]["step"] = "product"
-
-    save_users(users)
 
     bot.send_message(
         message.chat.id,
@@ -155,31 +150,16 @@ def handle_photo(message):
 
     downloaded = bot.download_file(file_info.file_path)
 
-    if user["step"] == "product":
+    with open("product.jpg", "wb") as f:
+        f.write(downloaded)
 
-        with open("product.jpg", "wb") as f:
-            f.write(downloaded)
+    users[uid]["step"] = "style"
 
-        users[uid]["product"] = "product.jpg"
-        users[uid]["step"] = "face"
+    save_users(users)
 
-        save_users(users)
+    bot.send_message(message.chat.id, "Produk diterima")
 
-        bot.send_message(message.chat.id, "Sekarang upload foto WAJAH / MODEL")
-
-        return
-
-    if user["step"] == "face":
-
-        with open("face.jpg", "wb") as f:
-            f.write(downloaded)
-
-        users[uid]["face"] = "face.jpg"
-        users[uid]["step"] = "style"
-
-        save_users(users)
-
-        style_menu(message.chat.id)
+    style_menu(message.chat.id)
 
 
 # =============================
@@ -222,15 +202,15 @@ Create a TikTok affiliate marketing video concept.
 
 Style: {style}
 
-Make 3 scenes.
+Write:
 
-Include:
-- hook
-- scene description
-- caption
+1 Hook
+3 Scenes
+Caption
+Call to action
 """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key={GEMINI_API}"
 
     headers = {
         "Content-Type": "application/json"
@@ -262,18 +242,13 @@ Include:
 
     users[uid]["limit"] -= 1
 
-    users[uid]["step"] = "product"
-
     save_users(users)
 
-    bot.send_message(
-        message.chat.id,
-        "Upload produk baru untuk generate lagi."
-    )
+    bot.send_message(message.chat.id, "Upload produk lagi untuk generate baru.")
 
 
 # =============================
-# ADMIN
+# ADMIN UPGRADE
 # =============================
 
 ADMIN_ID = 123456789
@@ -302,7 +277,7 @@ def add_pro(message):
 
 
 # =============================
-# RUN
+# RUN BOT
 # =============================
 
 print("BOT RUNNING")
