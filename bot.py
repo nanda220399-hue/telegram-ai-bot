@@ -2,116 +2,243 @@ import telebot
 import requests
 import json
 import os
+from PIL import Image
 
 TOKEN = "8033529702:AAENz15QMaIBja_soQa7yyHw02xaVw1RCW0"
 GEMINI_API = "AIzaSyBvn61VrlVZKcKu_OP2GmcFRRoWkEjNePM"
 
 bot = telebot.TeleBot(TOKEN)
 
-DB_FILE = "users.json"
+DB="users.json"
 
+# ================= DATABASE =================
 
-# =====================
-# DATABASE SIMPLE
-# =====================
-
-def load_users():
-    if not os.path.exists(DB_FILE):
+def load():
+    if not os.path.exists(DB):
         return {}
-    with open(DB_FILE,"r") as f:
-        return json.load(f)
+    return json.load(open(DB))
 
-def save_users(data):
-    with open(DB_FILE,"w") as f:
-        json.dump(data,f)
+def save(data):
+    json.dump(data,open(DB,"w"))
 
-users = load_users()
+users=load()
 
+def register(uid):
 
-def register_user(user_id):
+    uid=str(uid)
 
-    if str(user_id) not in users:
-        users[str(user_id)] = {
-            "limit":3,
-            "plan":"free"
+    if uid not in users:
+
+        users[uid]={
+            "limit":5,
+            "plan":"free",
+            "step":"none",
+            "product":None,
+            "face":None,
+            "style":None
         }
-        save_users(users)
 
+        save(users)
 
-# =====================
-# START COMMAND
-# =====================
+# ================= START =================
 
 @bot.message_handler(commands=['start'])
-def start(message):
+def start(m):
 
-    register_user(message.from_user.id)
+    register(m.from_user.id)
 
-    text = """
-Welcome AI Affiliate Bot
-
-Upload foto produk untuk membuat konten affiliate.
-
-Commands:
-
-/style
-/limit
-/upgrade
+    bot.send_message(m.chat.id,
 """
+AI AFFILIATE CREATOR
 
-    bot.reply_to(message,text)
+Upload foto produk dulu.
+""")
 
+    users[str(m.from_user.id)]["step"]="product"
 
-# =====================
-# CEK LIMIT
-# =====================
+    save(users)
+
+# ================= LIMIT =================
 
 @bot.message_handler(commands=['limit'])
-def check_limit(message):
+def limit(m):
 
-    user = users[str(message.from_user.id)]
+    register(m.from_user.id)
 
-    bot.reply_to(message,f"Limit kamu: {user['limit']}")
+    bot.send_message(m.chat.id,
+    f"Limit: {users[str(m.from_user.id)]['limit']}")
 
+# ================= STYLE =================
 
-# =====================
-# STYLE MENU
-# =====================
+def style_menu(chat):
 
-@bot.message_handler(commands=['style'])
-def style(message):
+    bot.send_message(chat,
+"""
+Pilih Style:
 
-    text = """
-Pilih style konten:
+1 OOTD
+2 Dance Smooth
+3 UGC Review
+4 Affiliate Photo
+""")
 
-1 - OOTD
-2 - Dance Smooth
-3 - UGC Review
+# ================= PHOTO =================
 
-Ketik angka style.
+@bot.message_handler(content_types=['photo'])
+def photo(m):
+
+    uid=str(m.from_user.id)
+
+    register(uid)
+
+    user=users[uid]
+
+    if user["limit"]<=0:
+
+        bot.send_message(m.chat.id,"Limit habis /upgrade")
+
+        return
+
+    file=bot.get_file(m.photo[-1].file_id)
+
+    img=bot.download_file(file.file_path)
+
+    if user["step"]=="product":
+
+        open("product.jpg","wb").write(img)
+
+        users[uid]["product"]="product.jpg"
+
+        users[uid]["step"]="face"
+
+        save(users)
+
+        bot.send_message(m.chat.id,
+        "Sekarang upload foto wajah / model")
+
+        return
+
+    if user["step"]=="face":
+
+        open("face.jpg","wb").write(img)
+
+        users[uid]["face"]="face.jpg"
+
+        users[uid]["step"]="style"
+
+        save(users)
+
+        style_menu(m.chat.id)
+
+# ================= STYLE SELECT =================
+
+@bot.message_handler(func=lambda m: m.text in ["1","2","3","4"])
+def style(m):
+
+    uid=str(m.from_user.id)
+
+    users[uid]["style"]=m.text
+
+    save(users)
+
+    bot.send_message(m.chat.id,"AI sedang membuat konten...")
+
+    generate(m)
+
+# ================= GENERATE =================
+
+def generate(m):
+
+    uid=str(m.from_user.id)
+
+    style_map={
+    "1":"OOTD influencer wearing product",
+    "2":"tiktok dance holding product",
+    "3":"UGC product review",
+    "4":"affiliate product showcase"
+    }
+
+    style=style_map[users[uid]["style"]]
+
+    prompt=f"""
+Create affiliate marketing content.
+
+Style: {style}
+
+Make 3 scenes video idea.
+
+Include script and caption.
 """
 
-    bot.reply_to(message,text)
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API}"
 
+    data={
+    "contents":[
+        {"parts":[{"text":prompt}]}
+    ]
+    }
 
-# =====================
-# UPGRADE
-# =====================
+    r=requests.post(url,json=data)
+
+    res=r.json()
+
+    try:
+
+        text=res["candidates"][0]["content"]["parts"][0]["text"]
+
+    except:
+
+        text="AI error"
+
+    bot.send_message(m.chat.id,text)
+
+    users[uid]["limit"]-=1
+
+    users[uid]["step"]="product"
+
+    save(users)
+
+    bot.send_message(m.chat.id,"Upload produk baru untuk generate lagi.")
+
+# ================= UPGRADE =================
 
 @bot.message_handler(commands=['upgrade'])
-def upgrade(message):
+def up(m):
 
-    text = """
-Upgrade plan:
-
-Pro = 100 generate
-Agency = unlimited
-
-Hubungi admin untuk upgrade.
+    bot.send_message(m.chat.id,
 """
+PLAN
 
-    bot.reply_to(message,text)
+Pro 100 generate
+Agency unlimited
 
+Hubungi admin.
+""")
+
+# ================= ADMIN =================
+
+ADMIN=123456789
+
+@bot.message_handler(commands=['addpro'])
+def addpro(m):
+
+    if m.from_user.id!=ADMIN:
+        return
+
+    uid=m.text.split()[1]
+
+    users[uid]["limit"]=100
+    users[uid]["plan"]="pro"
+
+    save(users)
+
+    bot.send_message(m.chat.id,"User upgraded")
+
+# ================= RUN =================
+
+print("BOT RUNNING")
+
+bot.infinity_polling()
 
 # =====================
 # HANDLE STYLE
