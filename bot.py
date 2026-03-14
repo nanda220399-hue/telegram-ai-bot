@@ -9,7 +9,7 @@ import time
 # =========================
 
 TOKEN = "8033529702:AAENz15QMaIBja_soQa7yyHw02xaVw1RCW0"
-HF_TOKEN = "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"
+HF_TOKEN = "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"
 REPLICATE_API = "r8_Lp5PPCCsYU7sxcFwqkYYZAjDWvMPE9I26vXVv"
 
 bot = telebot.TeleBot(TOKEN)
